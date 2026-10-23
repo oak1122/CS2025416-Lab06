@@ -5,10 +5,39 @@ services:
     container_name: db-mysql
     environment:
       MYSQL_ROOT_PASSWORD: cs2025416
+      MYSQL_DATABASE: demo
     ports:
       - "3306:3306"
     volumes:
       - mysqlDB:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "--silent"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - webnetwork
+
+  db-init:
+    image: mysql:latest
+    container_name: db-init
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      MYSQL_ROOT_PASSWORD: cs2025416
+    command:
+      - /bin/sh
+      - -c
+      - |
+        mysql --host=db-mysql --user=root --password="$${MYSQL_ROOT_PASSWORD}" --execute '
+        CREATE DATABASE IF NOT EXISTS demo;
+        CREATE TABLE IF NOT EXISTS demo.emp (
+          id INT PRIMARY KEY,
+          name VARCHAR(255) NOT NULL,
+          email VARCHAR(255) NOT NULL
+        );'
     networks:
       - webnetwork
 
@@ -20,7 +49,8 @@ services:
     ports:
       - "8080:80"
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - webnetwork
 
@@ -32,7 +62,10 @@ services:
     ports:
       - '3001:3001'
     depends_on:
-      - db
+      db:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
     environment:
       DB_HOST: db-mysql
       DB_USER: root
